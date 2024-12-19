@@ -1,6 +1,7 @@
 import 'package:esc_pos_utils/esc_pos_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
+import 'dart:math';
 
 void main() {
   runApp(ReceiptPrinterApp());
@@ -41,23 +42,28 @@ class _ReceiptPrinterScreenState extends State<ReceiptPrinterScreen> {
   final TextEditingController _passengersController = TextEditingController();
   final TextEditingController _totalPriceController = TextEditingController();
 
-  // Receipt number and date
-  int _receiptNumber = 1000; // Starting receipt number
+  // Invoice number and date
+  String? _invoiceNumber; // Store generated invoice number
   DateTime _selectedDate = DateTime.now();
 
   @override
   void initState() {
     super.initState();
     _fetchPairedPrinters();
-    // Increment receipt number for the next receipt
-    _incrementReceiptNumber();
+    // Generate the invoice number on initialization
+    _generateInvoiceNumber();
   }
 
-  void _incrementReceiptNumber() {
+  void _generateInvoiceNumber() {
+    String date = "${_selectedDate.day}";
+    String month = ["J1", "F2", "M3", "A4", "M5", "J6", "J7", "A8", "S9", "O8", "N10", "D12"][_selectedDate.month - 1];
+    int randomNum = Random().nextInt(1000); // Generate a random number between 0 and 999
     setState(() {
-      _receiptNumber++;
+      _invoiceNumber = "$date$month${randomNum.toString().padLeft(3, '0')}"; // Format: date-month-randomNumber
+       print("Generated Invoice Number: $_invoiceNumber"); // Log to terminal
     });
   }
+
 
   // Fetch paired printers
   Future<void> _fetchPairedPrinters() async {
@@ -135,7 +141,7 @@ class _ReceiptPrinterScreenState extends State<ReceiptPrinterScreen> {
     );
 
     bytes += generator.text(
-      "Fiscal Receipt #$_receiptNumber\nTaxi services\n${_selectedDate.toLocal().toString().split(' ')[0]}",
+      "Invoice No. $_invoiceNumber\nTaxi services\n${_selectedDate.toLocal().toString().split(' ')[0]}",
       styles: const PosStyles(align: PosAlign.center, bold: true),
       linesAfter: 1,
     );
@@ -169,213 +175,161 @@ class _ReceiptPrinterScreenState extends State<ReceiptPrinterScreen> {
     await PrintBluetoothThermal.writeBytes(bytes);
     
     await PrintBluetoothThermal.disconnect;
-}
+  }
 
-@override
-Widget build(BuildContext context) {
-return Scaffold(
-appBar:
-AppBar(
-title:
-const Text("Receipt Printer"),
-),
-body:
-Padding(
-padding:
-const EdgeInsets.all(16.0),
-child:
-SingleChildScrollView(
-child:
-Column(
-crossAxisAlignment:
-CrossAxisAlignment.start,
-children:
-[
-Text(
-"Connected Printer:${_connectedPrinter ?? "None"}",
-style:
-Theme.of(context).textTheme.titleMedium,
-),
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Receipt Printer"),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Connected Printer: ${_connectedPrinter ?? "None"}",
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              SizedBox(height: 16),
 
-SizedBox(height:
-16),
+              // Display paired printers list only if no printer is selected
+              if (!_isPrinterSelected) ...[
+                if (_isFetchingDevices)
+                  CircularProgressIndicator()
+                else if (_pairedPrinters != null && _pairedPrinters!.isNotEmpty)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Select a Printer to Connect:",
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.vertical,
+                        child: Column(
+                          children: _pairedPrinters!
+                              .map((printer) => ListTile(
+                                    title: Text(printer.name),
+                                    subtitle: Text(printer.macAdress),
+                                    onTap: () => _connectToPrinter(printer),
+                                  ))
+                              .toList(),
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  const Text("No paired devices found."),
+              ],
 
-// Display paired printers list only if no printer is selected
-if (!_isPrinterSelected) ...[
-if (_isFetchingDevices)
-CircularProgressIndicator()
-else if (_pairedPrinters != null && 
-_pairedPrinters!.isNotEmpty)
-Column(
-crossAxisAlignment:
-CrossAxisAlignment.start,
-children:
-[
-const Text(
-"Select a Printer to Connect:",
-style:
-TextStyle(fontWeight:
-FontWeight.bold),
-),
-SingleChildScrollView(
-scrollDirection:
-Axis.vertical,
-child:
-Column(
-children:
-_pairedPrinters!
-.map((printer) => ListTile(
-title:
-Text(printer.name),
-subtitle:
-Text(printer.macAdress),
-onTap:
-() => 
-_connectToPrinter(printer),
-))
-.toList(),
-),
-),
-],
-)
-else 
-const Text("No paired devices found."),
-],
+              // Show input fields for receipt data after a printer is selected
+              if (_isPrinterSelected) ...[
+                const Text(
+                  "Enter Business Details:",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
 
-// Show input fields for receipt data after a printer is selected
-if (_isPrinterSelected) ...[
-const Text(
-"Enter Business Details:",
-style:
-TextStyle(fontWeight:
-FontWeight.bold),
-),
+                // Input fields for business details
+                TextField(
+                  controller: _businessNameController,
+                  decoration: InputDecoration(labelText: "Business Name"),
+                ),
+                TextField(
+                  controller: _businessPhoneController,
+                  decoration: InputDecoration(labelText: "Business Phone"),
+                  keyboardType: TextInputType.phone,
+                ),
+                TextField(
+                  controller: _businessLocationController,
+                  decoration: InputDecoration(labelText: "Business Location"),
+                ),
 
-// Input fields for business details
-TextField(
-controller:_businessNameController,
-decoration:
-InputDecoration(labelText:"Business Name"),
-),
-TextField(
-controller:_businessPhoneController,
-decoration:
-InputDecoration(labelText:"Business Phone"),
-keyboardType:
-TextInputType.phone,
-),
-TextField(
-controller:_businessLocationController,
-decoration:
-InputDecoration(labelText:"Business Location"),
-),
+                const SizedBox(height: 16),
 
-const SizedBox(height:16),
+                const Text(
+                  "Enter Receipt Data:",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
 
-const Text(
-"Enter Receipt Data:",
-style:
-TextStyle(fontWeight:
-FontWeight.bold),
-),
+                // Input fields for receipt data
+                TextField(
+                  controller: _driverNameController,
+                  decoration: InputDecoration(labelText: "Driver's Name"),
+                ),
+                TextField(
+                  controller: _carNoController,
+                  decoration: InputDecoration(labelText: "Car Number"),
+                ),
+                TextField(
+                  controller: _fromLocationController,
+                  decoration: InputDecoration(labelText: "From Location"),
+                ),
+                TextField(
+                  controller: _toLocationController,
+                  decoration: InputDecoration(labelText: "To Location"),
+                ),
+                TextField(
+                  controller: _passengersController,
+                  decoration: InputDecoration(labelText: "Number of Passengers"),
+                  keyboardType: TextInputType.number,
+                ),
+                TextField(
+                  controller: _totalPriceController,
+                  decoration: InputDecoration(labelText: "Total Price"),
+                  keyboardType: TextInputType.number,
+                ),
 
-// Input fields for receipt data
-TextField(
-controller:_driverNameController,
-decoration:
-InputDecoration(labelText:"Driver's Name"),
-),
-TextField(
-controller:_carNoController,
-decoration:
-InputDecoration(labelText:"Car Number"),
-),
-TextField(
-controller:_fromLocationController,
-decoration:
-InputDecoration(labelText:"From Location"),
-),
-TextField(
-controller:_toLocationController,
-decoration:
-InputDecoration(labelText:"To Location"),
-),
-TextField(
-controller:_passengersController,
-decoration:
-InputDecoration(labelText:"Number of Passengers"),
-keyboardType:
-TextInputType.number,
-),
-TextField(
-controller:_totalPriceController,
-decoration:
-InputDecoration(labelText:"Total Price"),
-keyboardType:
-TextInputType.number,
-),
+                // Date Picker for selecting date
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text("Receipt Date:", style: TextStyle(fontWeight: FontWeight.bold)),
+                    ElevatedButton(
+                      onPressed: _selectDate,
+                      child: const Text("Select Date"),
+                    ),
+                  ],
+                ),
 
-// Date Picker for selecting date
-Row(
-mainAxisAlignment:
-MainAxisAlignment.spaceBetween,
-children:[
-const Text("Receipt Date:", style:
-TextStyle(fontWeight:
-FontWeight.bold)),
-ElevatedButton(
-onPressed:_selectDate,
-child:
-const Text("Select Date"),
-),
-],
-),
+                SizedBox(height: 16),
 
-SizedBox(height:
-16),
+                // Print button
+                ElevatedButton(
+                  onPressed: _isConnected ? _printReceipt : null,
+                  child: const Text("Print Receipt"),
+                ),
 
-// Print button
-ElevatedButton(
-onPressed:_isConnected ? 
-_printReceipt : null,
-child:
-const Text("Print Receipt"),
-),
+                SizedBox(height: 16),
 
-SizedBox(height:
-16),
+                // Disconnect button
+                ElevatedButton(
+                  onPressed: _isConnected ? _disconnectPrinter : null,
+                  child: const Text("Disconnect Printer"),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-// Disconnect button
-ElevatedButton(
-onPressed:_isConnected ?
-_disconnectPrinter : null,
-child:
-const Text("Disconnect Printer"),
-),
-],
-],
-),
-),
-)
-);
-}
-
-Future<void> 
-_selectDate() async {
-// Show date picker dialog and update selected date
-final DateTime? picked =
-await showDatePicker(
-context: context,
-initialDate:_selectedDate,
-firstDate: DateTime(2000), // Set your desired start date here
-lastDate: DateTime.now(), // Today or any future date you want to allow
-);
-if (picked != null && picked != 
-_selectedDate) {
-setState(() {
-_selectedDate =
-picked; // Update selected date with user choice
-});
-}
-}
+  Future<void> _selectDate() async {
+    // Show date picker dialog and update selected date
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2000), // Set your desired start date here
+      lastDate: DateTime.now(), // Today or any future date you want to allow
+    );
+    if (picked != null && picked != _selectedDate) {
+      setState(() {
+        _selectedDate = picked; // Update selected date with user choice
+        _generateInvoiceNumber(); // Regenerate invoice number on date change if needed.
+      });
+    }
+  }
 }

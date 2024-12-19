@@ -38,6 +38,9 @@ dependencies:
   print_bluetooth_thermal: ^1.1.4
   esc_pos_utils: ^1.1.0
   image: ^3.2.0 
+  path_provider: ^2.1.5
+  shared_preferences: ^2.3.3
+  pdf: ^3.8.4
 
 dev_dependencies:
   flutter_test:
